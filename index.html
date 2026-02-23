@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planner — Engenharia de Telecomunicações</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3e;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --accent3: #43e97b;
+    --text: #e8e8f0;
+    --text2: #8888aa;
+    --text3: #555570;
+    --done: #43e97b;
+    --blocked: #ff6584;
+    --available: #6c63ff;
+    --unavailable: #2a2a3e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* BACKGROUND GRID */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(108,99,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(108,99,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #app { position: relative; z-index: 1; }
+
+  /* HEADER */
+  header {
+    padding: 28px 40px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0;
+    background: rgba(10,10,15,0.92);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .logo span { color: var(--text2); }
+
+  .header-stats {
+    display: flex; gap: 24px; align-items: center;
+  }
+
+  .stat {
+    text-align: right;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  .stat strong {
+    display: block;
+    font-size: 18px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+  }
+
+  .progress-bar-wrap {
+    width: 160px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  /* LAYOUT */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    min-height: calc(100vh - 73px);
+  }
+
+  /* LEFT PANEL */
+  .left-panel {
+    padding: 32px 40px;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+  }
+
+  /* LEGEND */
+  .legend {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .legend-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+
+  /* PERIOD SECTION */
+  .period-section { margin-bottom: 40px; }
+
+  .period-title {
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  .period-title::after {
+    content: '';
+    flex: 1; height: 1px;
+    background: var(--border);
+  }
+
+  .subjects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+  }
+
+  /* SUBJECT CARD */
+  .subject-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .subject-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--border);
+    transition: background 0.2s;
+  }
+
+  .subject-card:hover:not(.unavailable):not(.selected) {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(108,99,255,0.15);
+  }
+
+  .subject-card:hover:not(.unavailable):not(.selected)::before {
+    background: var(--accent);
+  }
+
+  .subject-card.available::before { background: var(--accent); }
+  .subject-card.done::before { background: var(--done); }
+  .subject-card.selected { background: var(--surface2); border-color: var(--accent2); }
+  .subject-card.selected::before { background: var(--accent2); }
+  .subject-card.unavailable { opacity: 0.35; cursor: not-allowed; }
+  .subject-card.unavailable::before { background: var(--text3); }
+  .subject-card.time-conflict { border-color: var(--blocked); opacity: 0.5; cursor: not-allowed; }
+  .subject-card.time-conflict::before { background: var(--blocked); }
+
+  .card-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 6px;
+  }
+
+  .card-name {
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1.35;
+    flex: 1;
+    padding-right: 8px;
+  }
+
+  .card-code {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--text3);
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+
+  .card-cht {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text2);
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .card-status-text {
+    font-size: 10px;
+    color: var(--text3);
+    font-family: 'Space Mono', monospace;
+    margin-top: 6px;
+  }
+
+  .card-status-text.done-label { color: var(--done); }
+  .card-status-text.selected-label { color: var(--accent2); }
+
+  .badge-type {
+    font-size: 9px;
+    font-family: 'Space Mono', monospace;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-top: 4px;
+    display: inline-block;
+  }
+
+  .badge-OB { background: rgba(108,99,255,0.15); color: var(--accent); }
+  .badge-E  { background: rgba(255,101,132,0.15); color: var(--accent2); }
+  .badge-O  { background: rgba(67,233,123,0.12); color: var(--accent3); }
+  .badge-AC { background: rgba(255,200,80,0.12); color: #ffc850; }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    display: flex; flex-direction: column;
+    padding: 32px 24px;
+    overflow-y: auto;
+    gap: 24px;
+  }
+
+  /* DETAIL SECTION */
+  .detail-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .detail-box h3 {
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 14px;
+  }
+
+  /* SELECTED SUBJECT DETAILS */
+  .detail-name {
+    font-size: 16px; font-weight: 800;
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+
+  .detail-meta {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .detail-chip {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    background: var(--surface2);
+    color: var(--text2);
+    padding: 3px 8px;
+    border-radius: 5px;
+  }
+
+  .detail-input-group {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+
+  .detail-input-group label {
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 2px;
+  }
+
+  .detail-input-group input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+
+  .detail-input-group input:focus { border-color: var(--accent); }
+
+  .day-time-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+
+  /* BUTTONS */
+  .btn {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    border: none; cursor: pointer;
+    border-radius: 8px;
+    padding: 10px 16px;
+    transition: all 0.2s;
+    width: 100%;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: #7d75ff; }
+
+  .btn-done {
+    background: rgba(67,233,123,0.12);
+    color: var(--done);
+    border: 1px solid rgba(67,233,123,0.25);
+  }
+  .btn-done:hover { background: rgba(67,233,123,0.2); }
+
+  .btn-done.active {
+    background: var(--done);
+    color: #0a0a0f;
+  }
+
+  .btn-remove {
+    background: rgba(255,101,132,0.1);
+    color: var(--accent2);
+    border: 1px solid rgba(255,101,132,0.2);
+  }
+  .btn-remove:hover { background: rgba(255,101,132,0.2); }
+
+  .btn-row { display: flex; gap: 8px; }
+
+  /* SCHEDULE TABLE */
+  .schedule-table-wrap { overflow-x: auto; }
+
+  .schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .schedule-table th {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .schedule-table td {
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .schedule-table tr:last-child td { border-bottom: none; }
+
+  .sched-name { font-weight: 700; font-size: 12px; line-height: 1.3; }
+  .sched-detail { font-family: 'Space Mono', monospace; font-size: 9px; color: var(--text3); margin-top: 3px; }
+
+  .sched-day-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 32px 0;
+    color: var(--text3);
+    font-size: 12px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* PERIOD PLAN TABLE */
+  .period-plan {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 0;
+  }
+
+  .period-plan h3 {
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 14px;
+  }
+
+  .period-row { margin-bottom: 14px; }
+  .period-row-title {
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    letter-spacing: 0.1em;
+  }
+
+  .period-items { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .period-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    cursor: default;
+  }
+
+  .period-tag.done-tag {
+    background: rgba(67,233,123,0.1);
+    border-color: rgba(67,233,123,0.3);
+    color: var(--done);
+  }
+
+  .period-tag.selected-tag {
+    background: rgba(108,99,255,0.15);
+    border-color: rgba(108,99,255,0.4);
+    color: #a09aff;
+  }
+
+  /* FILTER BAR */
+  .filter-bar {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+
+  .filter-btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .filter-btn:hover, .filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .search-input {
+    flex: 1; min-width: 160px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    padding: 6px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-input:focus { border-color: var(--accent); }
+
+  .placeholder-panel {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text3);
+  }
+
+  .placeholder-panel .icon { font-size: 40px; margin-bottom: 12px; }
+  .placeholder-panel p { font-family: 'Space Mono', monospace; font-size: 11px; line-height: 1.8; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* TOOLTIP */
+  .tooltip-wrap { position: relative; }
+  .tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%; transform: translateX(-50%);
+    background: #1f1f30;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text2);
+    white-space: nowrap;
+    z-index: 50;
+    pointer-events: none;
+    max-width: 220px;
+    white-space: normal;
+    text-align: left;
+  }
+  .tooltip-wrap:hover .tooltip { display: block; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .right-panel { border-top: 1px solid var(--border); }
+    header { padding: 16px 20px; }
+    .left-panel { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">Telecom <span>/ UFMG</span> — Planner</div>
+    <div class="header-stats">
+      <div class="stat">
+        <strong id="stat-done">0</strong>
+        Concluídas
+      </div>
+      <div class="stat">
+        <strong id="stat-selected">0</strong>
+        Selecionadas
+      </div>
+      <div class="stat">
+        <strong id="stat-cht">0h</strong>
+        CH Total
+      </div>
+      <div>
+        <div class="stat" style="margin-bottom:4px">Progresso do curso</div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="left-panel">
+      <div class="filter-bar">
+        <input class="search-input" type="text" placeholder="Buscar matéria..." id="search-input" oninput="renderAll()">
+        <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">Todas</button>
+        <button class="filter-btn" data-filter="available" onclick="setFilter('available', this)">Disponíveis</button>
+        <button class="filter-btn" data-filter="selected" onclick="setFilter('selected', this)">Selecionadas</button>
+        <button class="filter-btn" data-filter="done" onclick="setFilter('done', this)">Concluídas</button>
+      </div>
+      <div id="subjects-container"></div>
+    </div>
+
+    <div class="right-panel">
+      <!-- Detail box -->
+      <div class="detail-box" id="detail-box">
+        <h3>Detalhes</h3>
+        <div class="placeholder-panel">
+          <div class="icon">📚</div>
+          <p>Selecione uma matéria<br>para ver detalhes e adicionar ao seu plano</p>
+        </div>
+      </div>
+
+      <!-- Schedule table -->
+      <div class="detail-box">
+        <h3>Grade de Horários</h3>
+        <div id="schedule-table-container">
+          <div class="empty-state">Nenhuma matéria selecionada</div>
+        </div>
+      </div>
+
+      <!-- Period plan -->
+      <div class="period-plan">
+        <h3>Plano por Período</h3>
+        <div id="period-plan-container">
+          <div class="empty-state">Selecione matérias para ver o plano</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const SUBJECTS = [
+  // 1º período
+  { code:'GMA00154', name:'Cálculo 1', period:1, cht:60, type:'OB', prereqs:[] },
+  { code:'GGE00132', name:'Ecologia Geral', period:1, cht:60, type:'OB', prereqs:[] },
+  { code:'GGM00137', name:'Fundamentos de Cálculo e Geometria', period:1, cht:60, type:'OB', prereqs:[] },
+  { code:'TET00317', name:'Introdução à Engenharia de Telecomunicações', period:1, cht:30, type:'OB', prereqs:[] },
+  { code:'TCC00326', name:'Programação de Computadores', period:1, cht:60, type:'OB', prereqs:[] },
+  { code:'GQI00048', name:'Química Geral Tecnológica', period:1, cht:75, type:'OB', prereqs:[] },
+  // 2º período
+  { code:'GMA00155', name:'Cálculo 2', period:2, cht:60, type:'OB', prereqs:['GGM00137','GMA00154'] },
+  { code:'TET00352', name:'Desenho Universal para Aplicações Web', period:2, cht:60, type:'OB', prereqs:['TCC00326'] },
+  { code:'TCC00319', name:'Estruturas de Dados', period:2, cht:60, type:'OB', prereqs:['TCC00326'] },
+  { code:'TDT00076', name:'Fundamentos de Desenho Técnico II', period:2, cht:60, type:'OB', prereqs:[] },
+  { code:'GFI00161', name:'Física Experimental I', period:2, cht:30, type:'OB', prereqs:[], coreqs:['GFI00158'] },
+  { code:'GFI00158', name:'Física I', period:2, cht:68, type:'OB', prereqs:['GMA00154'] },
+  { code:'GAN00140', name:'Álgebra Linear', period:2, cht:60, type:'OB', prereqs:['GGM00137'] },
+  // 3º período
+  { code:'TET00353', name:'Circuitos Digitais 1', period:3, cht:60, type:'OB', prereqs:[], pch:600 },
+  { code:'GMA00156', name:'Cálculo 3', period:3, cht:60, type:'OB', prereqs:['GAN00140','GMA00155'] },
+  { code:'GMA00158', name:'Cálculo 4', period:3, cht:60, type:'OB', prereqs:['GAN00140','GMA00155'] },
+  { code:'GET00177', name:'Estatística Básica', period:3, cht:60, type:'OB', prereqs:['GMA00155'] },
+  { code:'GFI00162', name:'Física Experimental II', period:3, cht:30, type:'OB', prereqs:['GFI00161'], coreqs:['GFI00159'] },
+  { code:'GFI00159', name:'Física II', period:3, cht:68, type:'OB', prereqs:['GFI00158','GMA00155'] },
+  { code:'TCC00328', name:'Programação Orientada a Objetos', period:3, cht:68, type:'OB', prereqs:['TCC00319'] },
+  { code:'TET00279', name:'Redes Locais e de Acesso', period:3, cht:60, type:'OB', prereqs:['TCC00319'] },
+  // 4º período
+  { code:'TET00355', name:'Circuitos Elétricos no Domínio do Tempo I', period:4, cht:60, type:'OB', prereqs:['GFI00159','GMA00158'] },
+  { code:'TET00281', name:'Eletromagnetismo I: Campos Estáticos', period:4, cht:60, type:'OB', prereqs:['GFI00159','GMA00156','GMA00158'] },
+  { code:'GFI00163', name:'Física Experimental III', period:4, cht:30, type:'OB', prereqs:['GFI00162'], coreqs:['GFI00160'] },
+  { code:'GFI00160', name:'Física III', period:4, cht:68, type:'OB', prereqs:['GFI00159'] },
+  { code:'TET00284', name:'Interconexão de Redes I', period:4, cht:60, type:'OB', prereqs:['TET00279'] },
+  { code:'TET00282', name:'Modelos Probabilísticos em Engenharia de Telecomunicações', period:4, cht:60, type:'OB', prereqs:['GET00177','GMA00158'] },
+  { code:'TET00257', name:'Métodos Matemáticos Aplicados à Engenharia de Telecomunicações', period:4, cht:60, type:'OB', prereqs:['GAN00140','GMA00156','GMA00158'] },
+  // 5º período
+  { code:'TGT00023', name:'Atividade de Extensão I', period:5, cht:60, type:'OB', prereqs:[], pch:1000 },
+  { code:'TET00354', name:'Circuitos Elétricos no Domínio da Frequência I', period:5, cht:60, type:'OB', prereqs:['TET00355'] },
+  { code:'TET00286', name:'Eletromagnetismo II: Campos Variáveis', period:5, cht:60, type:'OB', prereqs:['TET00281'] },
+  { code:'GFI00155', name:'Física Experimental IV', period:5, cht:30, type:'OB', prereqs:['GFI00163'], coreqs:['GFI00171'] },
+  { code:'GFI00171', name:'Física IV', period:5, cht:68, type:'OB', prereqs:['GFI00160'] },
+  { code:'TET00285', name:'Interconexão de Redes II', period:5, cht:60, type:'OB', prereqs:['TET00284'] },
+  { code:'TCC00325', name:'Métodos Numéricos', period:5, cht:60, type:'OB', prereqs:['GMA00155'] },
+  { code:'TET00287', name:'Sinais e Sistemas I', period:5, cht:60, type:'OB', prereqs:['TET00257'] },
+  { code:'TEC00240', name:'Ética, Cidadania e Legislação', period:5, cht:30, type:'OB', prereqs:[] },
+  // 6º período
+  { code:'TGT00024', name:'Atividade de Extensão II', period:6, cht:60, type:'OB', prereqs:['TGT00023'] },
+  { code:'TET00356', name:'Eletrônica Analógica 1', period:6, cht:60, type:'OB', prereqs:['TET00354'] },
+  { code:'TET00358', name:'Fundamentos de Processamento Digital de Sinais I', period:6, cht:60, type:'OB', prereqs:['TET00353','TET00257'] },
+  { code:'TET00295', name:'Laboratório de Redes', period:6, cht:60, type:'OB', prereqs:['TET00285'] },
+  { code:'TET00293', name:'Propagação e Antenas', period:6, cht:60, type:'OB', prereqs:['TET00286'] },
+  { code:'TET00292', name:'Propagação em Guias de Onda', period:6, cht:60, type:'OB', prereqs:['TET00286'] },
+  { code:'TET00288', name:'Sinais e Sistemas II', period:6, cht:60, type:'OB', prereqs:['TET00282','TET00287'] },
+  { code:'TET00296', name:'Telefonia Fixa e Aspectos Regulatórios', period:6, cht:60, type:'OB', prereqs:['TET00257','TET00285'] },
+  // 7º período
+  { code:'TET00298', name:'Dispositivos Fotônicos', period:7, cht:30, type:'OB', prereqs:['TET00292'] },
+  { code:'TET00357', name:'Eletrônica Analógica 2', period:7, cht:60, type:'OB', prereqs:['TET00356'] },
+  { code:'TGT00001', name:'Estágio Curricular Obrigatório', period:7, cht:160, type:'OB', prereqs:[], pch:2300 },
+  { code:'TET00301', name:'Fundamentos de Sistemas Móveis', period:7, cht:60, type:'OB', prereqs:['TET00286','TET00288'] },
+  { code:'TET00300', name:'Sistemas de Radiodifusão', period:7, cht:60, type:'OB', prereqs:['TET00288'] },
+  { code:'TET00297', name:'Sistemas de Transmissão e Radioenlace', period:7, cht:60, type:'OB', prereqs:['TET00288','TET00293'] },
+  { code:'TET00299', name:'Teoria da Informação e Códigos', period:7, cht:60, type:'OB', prereqs:['TET00288'] },
+  // 8º período
+  { code:'TET00305', name:'Arquitetura e Sistemas de Computação para Telecomunicações', period:8, cht:60, type:'E', prereqs:['TET00285'], pch:2500 },
+  { code:'TET00307', name:'Dispositivos Passivos de Micro-Ondas', period:8, cht:60, type:'E', prereqs:['TET00292'], pch:2500 },
+  { code:'TET00350', name:'Projeto de Eletrônica I', period:8, cht:60, type:'OB', prereqs:['TET00356','TET00358'] },
+  { code:'TET00349', name:'Projeto de Extensão', period:8, cht:60, type:'OB', prereqs:[], pch:2300 },
+  { code:'TET00304', name:'Segurança de Redes', period:8, cht:60, type:'E', prereqs:['TET00285'], pch:2500 },
+  { code:'TET00302', name:'Sistema de Comunicação via Satélite', period:8, cht:60, type:'OB', prereqs:['TET00288','TET00293'] },
+  { code:'TET00306', name:'Sistemas de Comunicações Óticas', period:8, cht:60, type:'E', prereqs:['TET00298'], pch:2500 },
+  // 9º período
+  { code:'TET00314', name:'Antenas para Altas Frequências e Conjuntos', period:9, cht:60, type:'E', prereqs:['TET00293'], pch:2500 },
+  { code:'TET00312', name:'Aplicações em Redes', period:9, cht:60, type:'E', prereqs:['TCC00328','TET00285'], pch:2500 },
+  { code:'TET00311', name:'Gerência de Redes e Engenharia de Tráfego', period:9, cht:60, type:'E', prereqs:['TCC00328','TET00285'], pch:2500 },
+  { code:'TET00315', name:'Medições em Ótica e Radiofrequência', period:9, cht:60, type:'E', prereqs:['TET00298','TET00307'], pch:2500 },
+  { code:'TET00308', name:'Metodologia Científica Aplicada à Engenharia de Telecomunicações', period:9, cht:30, type:'OB', prereqs:[], pch:2800 },
+  { code:'TET00351', name:'Projeto de Eletrônica II', period:9, cht:60, type:'OB', prereqs:['TET00357','TET00350'] },
+  { code:'TGT00025', name:'Projeto Final de Curso 1', period:9, cht:15, type:'OB', prereqs:[], pch:2800 },
+  { code:'TET00313', name:'Redes Multimídia', period:9, cht:60, type:'E', prereqs:['TET00285'], pch:2500 },
+  { code:'TET00316', name:'Sistemas de Comunicações de Última Geração', period:9, cht:60, type:'E', prereqs:['TET00301'], pch:2500 },
+  // 10º período
+  { code:'TEP00108', name:'Administração Aplicada à Engenharia', period:10, cht:60, type:'OB', prereqs:[], pch:2700 },
+  { code:'TEP00109', name:'Economia Aplicada à Engenharia', period:10, cht:60, type:'OB', prereqs:[], pch:2700 },
+  { code:'TGT00026', name:'Projeto Final de Curso 2', period:10, cht:15, type:'OB', prereqs:['TET00308','TGT00025'], pch:2500 },
+  // Não periodizadas
+  { code:'TET00348', name:'Antenas Lineares', period:null, cht:60, type:'O', prereqs:['TET00286'] },
+  { code:'TET00326', name:'Aprendizado de Máquinas', period:null, cht:60, type:'O', prereqs:['TCC00326','GET00177'] },
+  { code:'TGT00027', name:'Atividades Complementares 1', period:null, cht:50, type:'AC', prereqs:[] },
+  { code:'TGT00028', name:'Atividades Complementares de Extensão', period:null, cht:15, type:'AC', prereqs:[] },
+  { code:'TCC00287', name:'Banco de Dados I', period:null, cht:64, type:'O', prereqs:['TCC00326','TCC00319'] },
+  { code:'TET00330', name:'Cidades Inteligentes', period:null, cht:60, type:'O', prereqs:['TET00284'] },
+  { code:'TET00333', name:'Fotônica Computacional I', period:null, cht:60, type:'O', prereqs:['TET00286','TET00307'] },
+  { code:'TET00334', name:'Fundamentos de Comunicação Óptica I', period:null, cht:60, type:'O', prereqs:[] },
+  { code:'TET00331', name:'Gerência e Segurança de Redes', period:null, cht:60, type:'O', prereqs:['TET00284'] },
+  { code:'TET00303', name:'Infraestrutura para Telecomunicações', period:null, cht:60, type:'O', prereqs:['GFI00158'] },
+  { code:'TET00359', name:'Instrumentação e Sensores para IoT I', period:null, cht:60, type:'O', prereqs:[] },
+  { code:'TET00360', name:'Instrumentação e Sensores para IoT II', period:null, cht:60, type:'O', prereqs:['TET00359'] },
+  { code:'TET00319', name:'Introdução ao Kit de Desenvolvimento Arduino I', period:null, cht:60, type:'O', prereqs:['TCC00326','TET00355'] },
+  { code:'TET00339', name:'Introdução ao Wifi', period:null, cht:60, type:'O', prereqs:[] },
+  { code:'TET00011', name:'Introdução às Redes Neurais Artificiais', period:null, cht:68, type:'O', prereqs:[] },
+  { code:'GLC00292', name:'Libras I', period:null, cht:30, type:'O', prereqs:[] },
+  { code:'TET00341', name:'Microondas II', period:null, cht:60, type:'O', prereqs:['TET00307'] },
+  { code:'TET00322', name:'Optoeletrônica e Fotônica: Tecnologia de Fibras Ópticas Poliméricas', period:null, cht:68, type:'O', prereqs:['TET00306'] },
+  { code:'TET00343', name:'Tópicos Especiais em Engenharia de Telecomunicações I', period:null, cht:60, type:'O', prereqs:['TET00295'] },
+  { code:'TET00344', name:'Tópicos Especiais em Engenharia de Telecomunicações II', period:null, cht:60, type:'O', prereqs:['TET00282'] },
+  { code:'TET00345', name:'Tópicos Especiais em Engenharia de Telecomunicações III', period:null, cht:60, type:'O', prereqs:[] },
+  { code:'TET00346', name:'Tópicos Especiais: Mobilidade Acadêmica', period:null, cht:60, type:'O', prereqs:[] },
+];
+
+const DAYS_PT = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+const DAYS_SHORT = ['SEG','TER','QUA','QUI','SEX','SAB'];
+
+// ============================================================
+// STATE
+// ============================================================
+let state = loadState();
+
+function loadState() {
+  try {
+    const s = localStorage.getItem('telecom_planner');
+    if (s) return JSON.parse(s);
+  } catch(e) {}
+  return { done: [], selected: {}, filter: 'all' };
+}
+
+function saveState() {
+  localStorage.setItem('telecom_planner', JSON.stringify(state));
+}
+
+// state.selected = { code: { professor, turma, dias: [{dia, inicio, fim}] } }
+// state.done = [code, ...]
+
+let activeCard = null; // currently expanded detail card
+let currentFilter = 'all';
+
+// ============================================================
+// LOGIC
+// ============================================================
+function isDone(code) { return state.done.includes(code); }
+function isSelected(code) { return !!state.selected[code]; }
+
+function prereqsMet(subject) {
+  return subject.prereqs.every(req => isDone(req));
+}
+
+function getTotalDoneCHT() {
+  return state.done.reduce((acc, code) => {
+    const s = SUBJECTS.find(x => x.code === code);
+    return acc + (s ? s.cht : 0);
+  }, 0);
+}
+
+function pchMet(subject) {
+  if (!subject.pch) return true;
+  return getTotalDoneCHT() >= subject.pch;
+}
+
+function getStatus(subject) {
+  if (isDone(subject.code)) return 'done';
+  if (isSelected(subject.code)) return 'selected';
+  if (!prereqsMet(subject) || !pchMet(subject)) return 'unavailable';
+  if (hasTimeConflict(subject.code)) return 'time-conflict';
+  return 'available';
+}
+
+function hasTimeConflict(code) {
+  if (!isSelected(code)) return false;
+  const info = state.selected[code];
+  if (!info || !info.dias || info.dias.length === 0) return false;
+  // check conflict with other selected
+  for (const [otherCode, otherInfo] of Object.entries(state.selected)) {
+    if (otherCode === code) continue;
+    if (!otherInfo.dias) continue;
+    for (const slot of info.dias) {
+      for (const otherSlot of otherInfo.dias) {
+        if (slot.dia === otherSlot.dia && timesOverlap(slot.inicio, slot.fim, otherSlot.inicio, otherSlot.fim)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function timesOverlap(s1, e1, s2, e2) {
+  if (!s1 || !e1 || !s2 || !e2) return false;
+  const toMin = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+  return toMin(s1) < toMin(e2) && toMin(s2) < toMin(e1);
+}
+
+function selectSubject(code) {
+  const subj = SUBJECTS.find(s => s.code === code);
+  if (!subj) return;
+  const status = getStatus(subj);
+  if (status === 'done') return; // can't select done
+  if (status === 'unavailable') return;
+
+  if (!isSelected(code)) {
+    state.selected[code] = { professor: '', turma: '', dias: [{ dia: '', inicio: '', fim: '' }] };
+  }
+  activeCard = code;
+  saveState();
+  renderAll();
+}
+
+function deselectSubject(code) {
+  delete state.selected[code];
+  if (activeCard === code) activeCard = null;
+  saveState();
+  renderAll();
+}
+
+function toggleDone(code) {
+  if (isDone(code)) {
+    state.done = state.done.filter(c => c !== code);
+  } else {
+    state.done.push(code);
+    delete state.selected[code];
+    if (activeCard === code) activeCard = null;
+  }
+  saveState();
+  renderAll();
+}
+
+function updateField(code, field, value) {
+  if (!state.selected[code]) return;
+  state.selected[code][field] = value;
+  saveState();
+  renderScheduleTable();
+}
+
+function updateDia(code, idx, field, value) {
+  if (!state.selected[code]) return;
+  if (!state.selected[code].dias) state.selected[code].dias = [];
+  if (!state.selected[code].dias[idx]) state.selected[code].dias[idx] = { dia:'', inicio:'', fim:'' };
+  state.selected[code].dias[idx][field] = value;
+  saveState();
+  renderScheduleTable();
+}
+
+function addDia(code) {
+  if (!state.selected[code]) return;
+  state.selected[code].dias.push({ dia:'', inicio:'', fim:'' });
+  saveState();
+  renderDetailBox();
+}
+
+function removeDia(code, idx) {
+  if (!state.selected[code]) return;
+  state.selected[code].dias.splice(idx, 1);
+  saveState();
+  renderDetailBox();
+}
+
+// ============================================================
+// FILTER
+// ============================================================
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderSubjects();
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderAll() {
+  renderSubjects();
+  renderDetailBox();
+  renderScheduleTable();
+  renderPeriodPlan();
+  renderStats();
+}
+
+function renderStats() {
+  const done = state.done.length;
+  const sel = Object.keys(state.selected).length;
+  const cht = Object.keys(state.selected).reduce((acc, c) => {
+    const s = SUBJECTS.find(x => x.code === c);
+    return acc + (s ? s.cht : 0);
+  }, 0);
+  const total = SUBJECTS.filter(s => s.type !== 'AC').length;
+  document.getElementById('stat-done').textContent = done;
+  document.getElementById('stat-selected').textContent = sel;
+  document.getElementById('stat-cht').textContent = cht + 'h';
+  const pct = Math.round((done / total) * 100);
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+function renderSubjects() {
+  const container = document.getElementById('subjects-container');
+  const search = document.getElementById('search-input').value.toLowerCase();
+
+  const periods = [...new Set(SUBJECTS.map(s => s.period))].sort((a,b) => {
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return a - b;
+  });
+
+  let html = '';
+
+  for (const period of periods) {
+    const subjsRaw = SUBJECTS.filter(s => s.period === period);
+    let subjs = subjsRaw.filter(s => {
+      const st = getStatus(s);
+      if (currentFilter === 'available' && st !== 'available') return false;
+      if (currentFilter === 'selected' && st !== 'selected') return false;
+      if (currentFilter === 'done' && st !== 'done') return false;
+      if (search && !s.name.toLowerCase().includes(search) && !s.code.toLowerCase().includes(search)) return false;
+      return true;
+    });
+
+    if (subjs.length === 0) continue;
+
+    const label = period === null ? 'Não Periodizada' : `${period}º Período`;
+    html += `<div class="period-section">
+      <div class="period-title">${label}</div>
+      <div class="subjects-grid">`;
+
+    for (const s of subjs) {
+      const status = getStatus(s);
+      const info = state.selected[s.code] || {};
+
+      let statusLabel = '';
+      if (status === 'done') statusLabel = `<div class="card-status-text done-label">✓ Concluída</div>`;
+      else if (status === 'selected') statusLabel = `<div class="card-status-text selected-label">→ No plano</div>`;
+      else if (status === 'unavailable') {
+        const pchOk = pchMet(s);
+        const prereqOk = prereqsMet(s);
+        let reason = '';
+        if (!prereqOk && !pchOk) reason = 'Pré-req. e CH insuficiente';
+        else if (!prereqOk) reason = 'Pré-req. pendentes';
+        else reason = `CH mín: ${s.pch}h (você tem ${getTotalDoneCHT()}h)`;
+        statusLabel = `<div class="card-status-text">${reason}</div>`;
+      }
+      else if (status === 'time-conflict') statusLabel = `<div class="card-status-text" style="color:var(--blocked)">⚠ Conflito de horário</div>`;
+
+      const isActive = activeCard === s.code;
+
+      html += `<div class="subject-card ${status} ${isActive ? 'active-card' : ''}"
+        onclick="selectSubject('${s.code}')"
+        style="${isActive ? 'border-color:var(--accent2); box-shadow: 0 4px 20px rgba(255,101,132,0.2)' : ''}">
+        <div class="card-header">
+          <div>
+            <div class="card-name">${s.name}</div>
+            <div class="card-code">${s.code}</div>
+          </div>
+          <div class="card-cht">${s.cht}h</div>
+        </div>
+        <span class="badge-type badge-${s.type}">${s.type === 'OB' ? 'Obrigatória' : s.type === 'E' ? 'Eletiva' : s.type === 'O' ? 'Optativa' : 'Ativ. Compl.'}</span>
+        ${statusLabel}
+      </div>`;
+    }
+
+    html += `</div></div>`;
+  }
+
+  container.innerHTML = html || '<div class="empty-state" style="padding:60px 0">Nenhuma matéria encontrada</div>';
+}
+
+function renderDetailBox() {
+  const box = document.getElementById('detail-box');
+
+  if (!activeCard || !state.selected[activeCard]) {
+    box.innerHTML = `<h3>Detalhes</h3>
+      <div class="placeholder-panel">
+        <div class="icon">📚</div>
+        <p>Selecione uma matéria<br>para ver detalhes e adicionar ao seu plano</p>
+      </div>`;
+    return;
+  }
+
+  const s = SUBJECTS.find(x => x.code === activeCard);
+  const info = state.selected[activeCard];
+  const prereqNames = s.prereqs.map(r => {
+    const found = SUBJECTS.find(x => x.code === r);
+    return found ? found.name : r;
+  }).join(', ');
+
+  let diasHtml = '';
+  const dias = info.dias || [];
+  dias.forEach((slot, idx) => {
+    diasHtml += `<div class="day-time-grid" style="margin-bottom:8px; align-items:center">
+      <div>
+        <label>Dia</label>
+        <select style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:Syne,sans-serif;font-size:13px;padding:9px 12px;outline:none;width:100%;transition:border-color 0.2s"
+          onchange="updateDia('${s.code}', ${idx}, 'dia', this.value)">
+          <option value="" ${!slot.dia?'selected':''}>—</option>
+          ${DAYS_PT.map((d,i) => `<option value="${DAYS_SHORT[i]}" ${slot.dia===DAYS_SHORT[i]?'selected':''}>${d}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end">
+        <div>
+          <label>Início</label>
+          <input type="time" value="${slot.inicio||''}" onchange="updateDia('${s.code}', ${idx}, 'inicio', this.value)"
+            style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:Syne,sans-serif;font-size:13px;padding:9px 8px;outline:none;width:100%">
+        </div>
+        <div>
+          <label>Fim</label>
+          <input type="time" value="${slot.fim||''}" onchange="updateDia('${s.code}', ${idx}, 'fim', this.value)"
+            style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:Syne,sans-serif;font-size:13px;padding:9px 8px;outline:none;width:100%">
+        </div>
+        ${dias.length > 1 ? `<button onclick="removeDia('${s.code}', ${idx})" style="background:rgba(255,101,132,0.15);border:none;border-radius:6px;color:var(--accent2);cursor:pointer;padding:8px 10px;font-size:14px;height:38px;align-self:end">✕</button>` : ''}
+      </div>
+    </div>`;
+  });
+
+  box.innerHTML = `
+    <h3>Detalhes</h3>
+    <div class="detail-name">${s.name}</div>
+    <div class="detail-meta">
+      <span class="detail-chip">${s.code}</span>
+      <span class="detail-chip">${s.cht}h</span>
+      <span class="detail-chip">${s.period ? s.period+'º período' : 'Não periodizada'}</span>
+      <span class="badge-type badge-${s.type}" style="font-size:11px;padding:3px 8px">${s.type === 'OB' ? 'Obrigatória' : s.type === 'E' ? 'Eletiva' : s.type === 'O' ? 'Optativa' : 'Ativ. Compl.'}</span>
+    </div>
+    ${prereqNames ? `<div style="font-size:11px;color:var(--text3);font-family:Space Mono,monospace;margin-bottom:14px">Pré-req: ${prereqNames}</div>` : ''}
+    <div class="detail-input-group">
+      <div>
+        <label>Professor</label>
+        <input type="text" placeholder="Nome do professor" value="${info.professor||''}"
+          oninput="updateField('${s.code}', 'professor', this.value)">
+      </div>
+      <div>
+        <label>Turma</label>
+        <input type="text" placeholder="Ex: T01" value="${info.turma||''}"
+          oninput="updateField('${s.code}', 'turma', this.value)">
+      </div>
+      <div>
+        <label>Horários</label>
+        ${diasHtml}
+        <button class="btn" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);margin-top:4px;font-size:11px;padding:7px"
+          onclick="addDia('${s.code}')">+ Adicionar dia/horário</button>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn btn-done ${isDone(s.code)?'active':''}" onclick="toggleDone('${s.code}')">
+        ${isDone(s.code) ? '✓ Concluída' : 'Marcar como concluída'}
+      </button>
+      <button class="btn btn-remove" onclick="deselectSubject('${s.code}')">Remover</button>
+    </div>`;
+}
+
+function renderScheduleTable() {
+  const container = document.getElementById('schedule-table-container');
+  const selected = Object.entries(state.selected);
+  if (selected.length === 0) {
+    container.innerHTML = '<div class="empty-state">Nenhuma matéria selecionada</div>';
+    return;
+  }
+
+  let rows = '';
+  for (const [code, info] of selected) {
+    const s = SUBJECTS.find(x => x.code === code);
+    if (!s) continue;
+    const diasStr = (info.dias || []).filter(d => d.dia).map(d => {
+      return `${d.dia} ${d.inicio||'?'}–${d.fim||'?'}`;
+    }).join('<br>') || '—';
+
+    rows += `<tr>
+      <td>
+        <div class="sched-name">${s.name}</div>
+        <div class="sched-detail">${s.code}</div>
+      </td>
+      <td class="sched-day-time">${diasStr}</td>
+      <td style="font-family:Space Mono,monospace;font-size:11px;color:var(--text2)">${info.professor||'—'}</td>
+      <td style="font-family:Space Mono,monospace;font-size:11px;color:var(--text2)">${info.turma||'—'}</td>
+    </tr>`;
+  }
+
+  container.innerHTML = `<div class="schedule-table-wrap"><table class="schedule-table">
+    <thead><tr>
+      <th>Matéria</th><th>Horários</th><th>Professor</th><th>Turma</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function renderPeriodPlan() {
+  const container = document.getElementById('period-plan-container');
+  const allPeriods = [...new Set(SUBJECTS.map(s => s.period))].sort((a,b)=>{
+    if(a===null) return 1; if(b===null) return -1; return a-b;
+  });
+
+  const relevant = allPeriods.filter(p => {
+    return SUBJECTS.some(s => s.period === p && (isDone(s.code) || isSelected(s.code)));
+  });
+
+  if (relevant.length === 0) {
+    container.innerHTML = '<div class="empty-state">Selecione matérias para ver o plano</div>';
+    return;
+  }
+
+  let html = '';
+  for (const p of relevant) {
+    const pSubjs = SUBJECTS.filter(s => s.period === p && (isDone(s.code) || isSelected(s.code)));
+    const label = p === null ? 'Não Periodizada' : `${p}º Período`;
+    const tags = pSubjs.map(s => {
+      const cls = isDone(s.code) ? 'done-tag' : 'selected-tag';
+      return `<span class="period-tag ${cls}">${s.name}</span>`;
+    }).join('');
+    html += `<div class="period-row">
+      <div class="period-row-title">${label}</div>
+      <div class="period-items">${tags}</div>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+// ============================================================
+// LEGEND
+// ============================================================
+function injectLegend() {
+  const lb = document.querySelector('.left-panel');
+  const legend = document.createElement('div');
+  legend.className = 'legend';
+  legend.innerHTML = `
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Disponível</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>No plano</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--done)"></div>Concluída</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--text3)"></div>Bloqueada</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--blocked)"></div>Conflito</div>
+  `;
+  lb.insertBefore(legend, lb.children[1]);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+injectLegend();
+renderAll();
+</script>
+</body>
+</html>
