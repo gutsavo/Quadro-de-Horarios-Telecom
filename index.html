@@ -562,7 +562,7 @@
 <body>
 <div id="app">
   <header>
-    <div class="logo">Telecom <span>/ UFMG</span> — Planner</div>
+    <div class="logo">Telecom <span>/ UFF</span> — Planner</div>
     <div class="header-stats">
       <div class="stat">
         <strong id="stat-done">0</strong>
@@ -906,10 +906,7 @@ function renderAll() {
 function renderStats() {
   const done = state.done.length;
   const sel = Object.keys(state.selected).length;
-  const cht = Object.keys(state.selected).reduce((acc, c) => {
-    const s = SUBJECTS.find(x => x.code === c);
-    return acc + (s ? s.cht : 0);
-  }, 0);
+  const cht = getTotalDoneCHT();
   const total = SUBJECTS.filter(s => s.type !== 'AC').length;
   document.getElementById('stat-done').textContent = done;
   document.getElementById('stat-selected').textContent = sel;
