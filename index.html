@@ -108,7 +108,8 @@
   .layout {
     display: grid;
     grid-template-columns: 1fr 380px;
-    min-height: calc(100vh - 73px);
+    height: calc(100vh - var(--ui-offset, 113px));
+    overflow: hidden;
   }
 
   /* LEFT PANEL */
@@ -116,6 +117,7 @@
     padding: 32px 40px;
     border-right: 1px solid var(--border);
     overflow-y: auto;
+    height: 100%;
   }
 
   /* LEGEND */
@@ -257,11 +259,101 @@
   .badge-O  { background: rgba(67,233,123,0.12); color: var(--accent3); }
   .badge-AC { background: rgba(255,200,80,0.12); color: #ffc850; }
 
+  /* ADD BUTTON ON CARD */
+  .card-add-btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: rgba(108,99,255,0.15);
+    color: var(--accent);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .card-add-btn:hover { background: var(--accent); color: #fff; }
+  .card-add-btn.card-add-active {
+    border-color: var(--accent2);
+    background: rgba(255,101,132,0.12);
+    color: var(--accent2);
+  }
+  .card-add-btn.card-add-active:hover { background: var(--accent2); color: #fff; }
+
+  /* REQ INFO ON CARD */
+  .card-req {
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 6px;
+    line-height: 1.6;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+  }
+  .req-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text3);
+    margin-right: 2px;
+  }
+
+  /* REQ STATUS TAGS */
+  .req-tag {
+    display: inline-block;
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    padding: 3px 8px;
+    border-radius: 4px;
+    line-height: 1.4;
+    white-space: nowrap;
+    font-weight: 700;
+  }
+  .req-done {
+    background: rgba(67,233,123,0.25);
+    color: #2ecc71;
+    border: 1px solid rgba(67,233,123,0.5);
+  }
+  .req-cursando {
+    background: rgba(255,200,50,0.2);
+    color: #f5c518;
+    border: 1px solid rgba(255,200,50,0.5);
+  }
+  .req-pending {
+    background: rgba(255,101,132,0.18);
+    color: #ff6b8a;
+    border: 1px solid rgba(255,101,132,0.4);
+  }
+
+  .req-block {
+    font-size: 11px;
+    color: var(--text2);
+    margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+  }
+  .req-block .req-label {
+    display: block;
+    width: 100%;
+    margin-bottom: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text3);
+  }
+
   /* RIGHT PANEL */
   .right-panel {
     display: flex; flex-direction: column;
     padding: 32px 24px;
     overflow-y: auto;
+    height: 100%;
     gap: 24px;
   }
 
@@ -967,18 +1059,50 @@ function timesOverlap(s1, e1, s2, e2) {
 }
 
 function selectSubject(code) {
+  // Opens the edit detail panel; if not yet in state, creates a draft
   const subj = SUBJECTS.find(s => s.code === code);
   if (!subj) return;
   const status = getStatus(subj);
-  if (status === 'done') return; // can't select done
-  if (status === 'unavailable') return;
-
+  if (status === 'done' || status === 'unavailable') return;
   if (!isSelected(code)) {
-    state.selected[code] = { professor: '', turma: '', dias: [{ dia: '', inicio: '', fim: '' }] };
+    // Create draft - not confirmed yet (confirmed=false means not shown in grid)
+    state.selected[code] = { professor: '', turma: '', dias: [{ dia: '', inicio: '', fim: '' }], confirmed: false };
   }
   activeCard = code;
   saveState();
   renderAll();
+}
+
+function confirmSubject(code) {
+  if (!state.selected[code]) return;
+  const dias = state.selected[code].dias || [];
+  // Validate: at least one slot with dia + inicio + fim
+  const valid = dias.some(d => d.dia && d.inicio && d.fim);
+  if (!valid) {
+    alert('Preencha pelo menos um dia e horário de início e fim antes de adicionar.');
+    return;
+  }
+  state.selected[code].confirmed = true;
+  saveState();
+  renderAll();
+  // Switch to quadro tab to show result
+  const quadroBtn = document.querySelectorAll('.tab-btn')[1];
+  switchTab('quadro', quadroBtn);
+}
+
+function previewSubject(code) {
+  const subj = SUBJECTS.find(s => s.code === code);
+  if (!subj) return;
+  // If already selected (in plan), open full detail
+  if (isSelected(code)) {
+    activeCard = code;
+    renderAll();
+    return;
+  }
+  // Done or not-yet-added: show preview (with remove option for done)
+  activeCard = '__preview__' + code;
+  renderSubjects();
+  renderDetailBox();
 }
 
 function deselectSubject(code) {
@@ -1065,7 +1189,8 @@ function renderStats() {
 
 function renderSubjects() {
   const container = document.getElementById('subjects-container');
-  const search = document.getElementById('search-input').value.toLowerCase();
+  const normalize = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const search = normalize(document.getElementById('search-input').value);
 
   const periods = [...new Set(SUBJECTS.map(s => s.period))].sort((a,b) => {
     if (a === null) return 1;
@@ -1082,7 +1207,7 @@ function renderSubjects() {
       if (currentFilter === 'available' && st !== 'available') return false;
       if (currentFilter === 'selected' && st !== 'selected') return false;
       if (currentFilter === 'done' && st !== 'done') return false;
-      if (search && !s.name.toLowerCase().includes(search) && !s.code.toLowerCase().includes(search)) return false;
+      if (search && !normalize(s.name).includes(search) && !s.code.toLowerCase().includes(search)) return false;
       return true;
     });
 
@@ -1099,7 +1224,10 @@ function renderSubjects() {
 
       let statusLabel = '';
       if (status === 'done') statusLabel = `<div class="card-status-text done-label">✓ Concluída</div>`;
-      else if (status === 'selected') statusLabel = `<div class="card-status-text selected-label">→ No plano</div>`;
+      else if (status === 'selected') {
+        const confirmed = state.selected[s.code] && state.selected[s.code].confirmed;
+        statusLabel = `<div class="card-status-text selected-label">${confirmed ? '📅 No quadro de horários' : '✏ Rascunho (não adicionado)'}</div>`;
+      }
       else if (status === 'unavailable') {
         const pchOk = pchMet(s);
         const prereqOk = prereqsMet(s);
@@ -1113,8 +1241,38 @@ function renderSubjects() {
 
       const isActive = activeCard === s.code;
 
+      // Build prereq/coreq info text
+      const prereqList = s.prereqs.map(r => {
+        const f = SUBJECTS.find(x=>x.code===r);
+        const name = f ? f.name : r;
+        const done = isDone(r);
+        const cursando = isSelected(r) && state.selected[r] && state.selected[r].confirmed;
+        const tag = done
+          ? `<span class="req-tag req-done">✓ ${name}</span>`
+          : cursando
+            ? `<span class="req-tag req-cursando">→ ${name}</span>`
+            : `<span class="req-tag req-pending">${name}</span>`;
+        return tag;
+      });
+      const coreqList  = (s.coreqs||[]).map(r => {
+        const f = SUBJECTS.find(x=>x.code===r);
+        const name = f ? f.name : r;
+        const done = isDone(r);
+        const cursando = isSelected(r) && state.selected[r] && state.selected[r].confirmed;
+        const tag = done
+          ? `<span class="req-tag req-done">✓ ${name}</span>`
+          : cursando
+            ? `<span class="req-tag req-cursando">→ ${name}</span>`
+            : `<span class="req-tag req-pending">${name}</span>`;
+        return tag;
+      });
+      const reqHtml = [
+        prereqList.length ? `<div class="card-req"><span class="req-label">Pré-req:</span> ${prereqList.join(' ')}</div>` : '',
+        coreqList.length  ? `<div class="card-req"><span class="req-label">Co-req:</span> ${coreqList.join(' ')}</div>`   : ''
+      ].join('');
+
       html += `<div class="subject-card ${status} ${isActive ? 'active-card' : ''}"
-        onclick="selectSubject('${s.code}')"
+        onclick="previewSubject('${s.code}')"
         style="${isActive ? 'border-color:var(--accent2); box-shadow: 0 4px 20px rgba(255,101,132,0.2)' : ''}">
         <div class="card-header">
           <div>
@@ -1124,6 +1282,7 @@ function renderSubjects() {
           <div class="card-cht">${s.cht}h</div>
         </div>
         <span class="badge-type badge-${s.type}">${s.type === 'OB' ? 'Obrigatória' : s.type === 'E' ? 'Eletiva' : s.type === 'O' ? 'Optativa' : 'Ativ. Compl.'}</span>
+        ${reqHtml}
         ${statusLabel}
       </div>`;
     }
@@ -1137,21 +1296,83 @@ function renderSubjects() {
 function renderDetailBox() {
   const box = document.getElementById('detail-box');
 
+  // Preview mode (card clicked but not yet added)
+  if (activeCard && activeCard.startsWith('__preview__')) {
+    const code = activeCard.replace('__preview__','');
+    const s = SUBJECTS.find(x => x.code === code);
+    if (!s) { box.innerHTML = '<h3>Detalhes</h3>'; return; }
+    const prereqList = s.prereqs.map(r => {
+      const f = SUBJECTS.find(x=>x.code===r);
+      const name = f ? f.name : r;
+      const done = isDone(r);
+      const cursando = isSelected(r) && state.selected[r] && state.selected[r].confirmed;
+      return done
+        ? `<span class="req-tag req-done">✓ ${name}</span>`
+        : cursando
+          ? `<span class="req-tag req-cursando">→ ${name}</span>`
+          : `<span class="req-tag req-pending">${name}</span>`;
+    });
+    const coreqList  = (s.coreqs||[]).map(r => {
+      const f = SUBJECTS.find(x=>x.code===r);
+      const name = f ? f.name : r;
+      const done = isDone(r);
+      const cursando = isSelected(r) && state.selected[r] && state.selected[r].confirmed;
+      return done
+        ? `<span class="req-tag req-done">✓ ${name}</span>`
+        : cursando
+          ? `<span class="req-tag req-cursando">→ ${name}</span>`
+          : `<span class="req-tag req-pending">${name}</span>`;
+    });
+    const status = getStatus(s);
+    const canAdd = status === 'available';
+    box.innerHTML = `
+      <h3>Detalhes</h3>
+      <div class="detail-name">${s.name}</div>
+      <div class="detail-meta">
+        <span class="detail-chip">${s.code}</span>
+        <span class="detail-chip">${s.cht}h</span>
+        <span class="detail-chip">${s.period ? s.period+'º período' : 'Não periodizada'}</span>
+        <span class="badge-type badge-${s.type}" style="font-size:11px;padding:3px 8px">${s.type==='OB'?'Obrigatória':s.type==='E'?'Eletiva':s.type==='O'?'Optativa':'Ativ. Compl.'}</span>
+      </div>
+      ${prereqList.length ? `<div class="req-block"><span class="req-label">Pré-requisitos</span>${prereqList.join(' ')}</div>` : ''}
+      ${coreqList.length  ? `<div class="req-block"><span class="req-label">Co-requisitos</span>${coreqList.join(' ')}</div>`  : ''}
+      ${!prereqList.length && !coreqList.length ? `<div class="req-block" style="color:var(--accent3)">✓ Sem pré ou co-requisitos</div>` : ''}
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
+        ${canAdd
+          ? `<button class="btn btn-primary" onclick="selectSubject('${s.code}')">+ Adicionar ao plano</button>`
+          : status==='done'
+            ? `<div style="font-family:Space Mono,monospace;font-size:11px;color:var(--done);padding:4px 0">✓ Concluída</div>
+               <button class="btn btn-remove" onclick="toggleDone('${s.code}')">Remover conclusão</button>`
+            : `<div style="font-family:Space Mono,monospace;font-size:11px;color:var(--text3);padding:10px 0">${
+                status==='unavailable' ? (pchMet(s) ? 'Pré-requisitos pendentes' : `CH mínima: ${s.pch}h (você tem ${getTotalDoneCHT()}h)`)
+                : ''
+              }</div>`
+        }
+      </div>`;
+    return;
+  }
+
   if (!activeCard || !state.selected[activeCard]) {
     box.innerHTML = `<h3>Detalhes</h3>
       <div class="placeholder-panel">
         <div class="icon">📚</div>
-        <p>Selecione uma matéria<br>para ver detalhes e adicionar ao seu plano</p>
+        <p>Clique em uma matéria para ver detalhes</p>
       </div>`;
     return;
   }
 
   const s = SUBJECTS.find(x => x.code === activeCard);
   const info = state.selected[activeCard];
-  const prereqNames = s.prereqs.map(r => {
-    const found = SUBJECTS.find(x => x.code === r);
-    return found ? found.name : r;
-  }).join(', ');
+  const prereqList2 = s.prereqs.map(r => { const f=SUBJECTS.find(x=>x.code===r); return f?f.name:r; });
+  const coreqList2  = (s.coreqs||[]).map(r => { const f=SUBJECTS.find(x=>x.code===r); return f?f.name:r; });
+  const prereqNames = prereqList2.join(', ');
+  const makeReqTag = r => {
+    const f = SUBJECTS.find(x=>x.code===r); const name = f?f.name:r;
+    const done = isDone(r); const cursando = isSelected(r) && state.selected[r] && state.selected[r].confirmed;
+    return done ? `<span class="req-tag req-done">✓ ${name}</span>` : cursando ? `<span class="req-tag req-cursando">→ ${name}</span>` : `<span class="req-tag req-pending">${name}</span>`;
+  };
+  const prereqList2map = s.prereqs.map(makeReqTag).join(' ');
+  const coreqList2map  = (s.coreqs||[]).map(makeReqTag).join(' ');
 
   let diasHtml = '';
   const dias = info.dias || [];
@@ -1190,7 +1411,8 @@ function renderDetailBox() {
       <span class="detail-chip">${s.period ? s.period+'º período' : 'Não periodizada'}</span>
       <span class="badge-type badge-${s.type}" style="font-size:11px;padding:3px 8px">${s.type === 'OB' ? 'Obrigatória' : s.type === 'E' ? 'Eletiva' : s.type === 'O' ? 'Optativa' : 'Ativ. Compl.'}</span>
     </div>
-    ${prereqNames ? `<div style="font-size:11px;color:var(--text3);font-family:Space Mono,monospace;margin-bottom:14px">Pré-req: ${prereqNames}</div>` : ''}
+    ${prereqList2.length ? `<div class="req-block"><span class="req-label">Pré-requisitos</span>${prereqList2map}</div>` : ''}
+    ${coreqList2.length  ? `<div class="req-block"><span class="req-label">Co-requisitos</span>${coreqList2map}</div>`  : ''}
     <div class="detail-input-group">
       <div>
         <label>Professor</label>
@@ -1209,17 +1431,23 @@ function renderDetailBox() {
           onclick="addDia('${s.code}')">+ Adicionar dia/horário</button>
       </div>
     </div>
-    <div class="btn-row" style="margin-top:16px">
-      <button class="btn btn-done ${isDone(s.code)?'active':''}" onclick="toggleDone('${s.code}')">
-        ${isDone(s.code) ? '✓ Concluída' : 'Marcar como concluída'}
-      </button>
-      <button class="btn btn-remove" onclick="deselectSubject('${s.code}')">Remover</button>
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
+      ${!state.selected[s.code].confirmed
+        ? `<button class="btn btn-primary" onclick="confirmSubject('${s.code}')">+ Adicionar ao Quadro de Horários</button>`
+        : `<div style="font-family:Space Mono,monospace;font-size:10px;color:var(--accent3);margin-bottom:4px">✓ No quadro de horários</div>`
+      }
+      <div class="btn-row">
+        <button class="btn btn-done ${isDone(s.code)?'active':''}" onclick="toggleDone('${s.code}')">
+          ${isDone(s.code) ? '✓ Concluída' : 'Marcar como concluída'}
+        </button>
+        <button class="btn btn-remove" onclick="deselectSubject('${s.code}')">Remover</button>
+      </div>
     </div>`;
 }
 
 function renderScheduleTable() {
   const container = document.getElementById('schedule-table-container');
-  const selected = Object.entries(state.selected);
+  const selected = Object.entries(state.selected).filter(([,info]) => info.confirmed);
   if (selected.length === 0) {
     container.innerHTML = '<div class="empty-state">Nenhuma matéria selecionada</div>';
     return;
@@ -1315,6 +1543,7 @@ function renderWeeklyGrid() {
   let colorIdx = 0;
 
   for (const [code, info] of Object.entries(state.selected)) {
+    if (!info.confirmed) continue; // only show confirmed subjects in grid
     const s = SUBJECTS.find(x => x.code === code);
     if (!s || !info.dias) continue;
     if (!(code in colorMap)) { colorMap[code] = colorIdx++ % 10; }
@@ -1422,6 +1651,18 @@ function injectLegend() {
 // ============================================================
 injectLegend();
 renderAll();
+
+// Compute actual header + tabbar height for sticky layout
+function fixLayoutHeight() {
+  const header = document.querySelector('header');
+  const tabbar = document.querySelector('.tab-bar');
+  if (header && tabbar) {
+    const h = header.offsetHeight + tabbar.offsetHeight;
+    document.documentElement.style.setProperty('--ui-offset', h + 'px');
+  }
+}
+fixLayoutHeight();
+window.addEventListener('resize', fixLayoutHeight);
 </script>
 </body>
 </html>
