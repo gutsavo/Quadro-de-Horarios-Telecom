@@ -1453,28 +1453,47 @@ function renderScheduleTable() {
     return;
   }
 
-  let rows = '';
+  const DAY_ORDER = ['SEG','TER','QUA','QUI','SEX','SAB'];
+  const toMin = t => { if (!t) return 9999; const [h,m] = t.split(':').map(Number); return h*60+m; };
+
+  // Expand each subject into one row per (day+time slot), then sort
+  const rowData = [];
   for (const [code, info] of selected) {
     const s = SUBJECTS.find(x => x.code === code);
     if (!s) continue;
-    const diasStr = (info.dias || []).filter(d => d.dia).map(d => {
-      return `${d.dia} ${d.inicio||'?'}–${d.fim||'?'}`;
-    }).join('<br>') || '—';
+    const dias = (info.dias || []).filter(d => d.dia && d.inicio && d.fim);
+    if (dias.length === 0) {
+      rowData.push({ s, info, dia: '', inicio: '', fim: '', sortDay: 99, sortTime: 9999 });
+    } else {
+      for (const d of dias) {
+        rowData.push({ s, info, dia: d.dia, inicio: d.inicio, fim: d.fim,
+          sortDay: DAY_ORDER.indexOf(d.dia) === -1 ? 99 : DAY_ORDER.indexOf(d.dia),
+          sortTime: toMin(d.inicio)
+        });
+      }
+    }
+  }
 
+  rowData.sort((a, b) => a.sortDay !== b.sortDay ? a.sortDay - b.sortDay : a.sortTime - b.sortTime);
+
+  // Group consecutive rows of same subject+day so we don't repeat name
+  let rows = '';
+  for (const r of rowData) {
+    const horario = r.dia ? `<span style="color:var(--accent)">${r.dia}</span> ${r.inicio}–${r.fim}` : '—';
     rows += `<tr>
       <td>
-        <div class="sched-name">${s.name}</div>
-        <div class="sched-detail">${s.code}</div>
+        <div class="sched-name">${r.s.name}</div>
+        <div class="sched-detail">${r.s.code}</div>
       </td>
-      <td class="sched-day-time">${diasStr}</td>
-      <td style="font-family:Space Mono,monospace;font-size:11px;color:var(--text2)">${info.professor||'—'}</td>
-      <td style="font-family:Space Mono,monospace;font-size:11px;color:var(--text2)">${info.turma||'—'}</td>
+      <td class="sched-day-time">${horario}</td>
+      <td style="font-family:Space Mono,monospace;font-size:11px;color:var(--text2)">${r.info.professor||'—'}</td>
+      <td style="font-family:Space Mono,monospace;font-size:11px;color:var(--text2)">${r.info.turma||'—'}</td>
     </tr>`;
   }
 
   container.innerHTML = `<div class="schedule-table-wrap"><table class="schedule-table">
     <thead><tr>
-      <th>Matéria</th><th>Horários</th><th>Professor</th><th>Turma</th>
+      <th>Matéria</th><th>Dia / Horário</th><th>Professor</th><th>Turma</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
