@@ -1456,36 +1456,36 @@ function renderScheduleTable() {
   const DAY_ORDER = ['SEG','TER','QUA','QUI','SEX','SAB'];
   const toMin = t => { if (!t) return 9999; const [h,m] = t.split(':').map(Number); return h*60+m; };
 
-  // Expand each subject into one row per (day+time slot), then sort
+  // Build one row per subject; sort its slots by day, then sort subjects by earliest slot
   const rowData = [];
   for (const [code, info] of selected) {
     const s = SUBJECTS.find(x => x.code === code);
     if (!s) continue;
-    const dias = (info.dias || []).filter(d => d.dia && d.inicio && d.fim);
-    if (dias.length === 0) {
-      rowData.push({ s, info, dia: '', inicio: '', fim: '', sortDay: 99, sortTime: 9999 });
-    } else {
-      for (const d of dias) {
-        rowData.push({ s, info, dia: d.dia, inicio: d.inicio, fim: d.fim,
-          sortDay: DAY_ORDER.indexOf(d.dia) === -1 ? 99 : DAY_ORDER.indexOf(d.dia),
-          sortTime: toMin(d.inicio)
-        });
-      }
-    }
+    const dias = (info.dias || [])
+      .filter(d => d.dia && d.inicio && d.fim)
+      .sort((a, b) => {
+        const da = DAY_ORDER.indexOf(a.dia) === -1 ? 99 : DAY_ORDER.indexOf(a.dia);
+        const db = DAY_ORDER.indexOf(b.dia) === -1 ? 99 : DAY_ORDER.indexOf(b.dia);
+        return da !== db ? da - db : toMin(a.inicio) - toMin(b.inicio);
+      });
+    const firstDay  = dias.length ? (DAY_ORDER.indexOf(dias[0].dia) === -1 ? 99 : DAY_ORDER.indexOf(dias[0].dia)) : 99;
+    const firstTime = dias.length ? toMin(dias[0].inicio) : 9999;
+    rowData.push({ s, info, dias, firstDay, firstTime });
   }
 
-  rowData.sort((a, b) => a.sortDay !== b.sortDay ? a.sortDay - b.sortDay : a.sortTime - b.sortTime);
+  rowData.sort((a, b) => a.firstDay !== b.firstDay ? a.firstDay - b.firstDay : a.firstTime - b.firstTime);
 
-  // Group consecutive rows of same subject+day so we don't repeat name
   let rows = '';
   for (const r of rowData) {
-    const horario = r.dia ? `<span style="color:var(--accent)">${r.dia}</span> ${r.inicio}–${r.fim}` : '—';
+    const horariosHtml = r.dias.length
+      ? r.dias.map(d => `<span style="color:var(--accent);font-weight:700">${d.dia}</span> ${d.inicio}–${d.fim}`).join('<br>')
+      : '—';
     rows += `<tr>
       <td>
         <div class="sched-name">${r.s.name}</div>
         <div class="sched-detail">${r.s.code}</div>
       </td>
-      <td class="sched-day-time">${horario}</td>
+      <td class="sched-day-time">${horariosHtml}</td>
       <td style="font-family:Space Mono,monospace;font-size:11px;color:var(--text2)">${r.info.professor||'—'}</td>
       <td style="font-family:Space Mono,monospace;font-size:11px;color:var(--text2)">${r.info.turma||'—'}</td>
     </tr>`;
